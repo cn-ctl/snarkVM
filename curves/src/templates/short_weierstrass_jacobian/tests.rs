@@ -12,123 +12,129 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::msm::*;
-use snarkvm_curves::{
-    bls12_377::{Fr, G1Projective, FqParameters, Bls12_377G1Parameters},
-    traits::{AffineCurve, ProjectiveCurve}, templates::short_weierstrass_jacobian::Affine,
-};
-use snarkvm_fields::{PrimeField, Zero, Fp384};
+use super::{Affine, Projective};
+use crate::{AffineCurve, ProjectiveCurve, ShortWeierstrassParameters};
+use snarkvm_fields::Zero;
 use snarkvm_utilities::{
-    rand::{TestRng, Uniform},
-    BitIteratorBE, BigInteger384, BigInteger256, 
+    io::Cursor,
+    rand::Uniform,
+    serialize::{CanonicalDeserialize, CanonicalSerialize},
+    Compress,
+    TestRng,
+    Validate,
 };
-use std::marker::PhantomData;
-fn naive_variable_base_msm<G: AffineCurve>(
-    bases: &[G],
-    scalars: &[<G::ScalarField as PrimeField>::BigInteger],
-) -> G::Projective {
-    let mut acc = G::Projective::zero();
 
-    for (base, scalar) in bases.iter().zip(scalars.iter()) {
-        acc += base.mul_bits(BitIteratorBE::new(*scalar));
+pub const ITERATIONS: usize = 10;
+
+pub fn sw_tests<P: ShortWeierstrassParameters>(rng: &mut TestRng) {
+    sw_curve_serialization_test::<P>(rng);
+    sw_from_random_bytes::<P>(rng);
+}
+
+pub fn sw_curve_serialization_test<P: ShortWeierstrassParameters>(rng: &mut TestRng) {
+    let modes = [
+        (Compress::Yes, Validate::Yes),
+        (Compress::No, Validate::No),
+        (Compress::Yes, Validate::No),
+        (Compress::No, Validate::Yes),
+    ];
+    for (compress, validate) in modes {
+        let buf_size = Affine::<P>::zero().serialized_size(compress);
+
+        for _ in 0..10 {
+            let a = Projective::<P>::rand(rng);
+            let mut a = a.to_affine();
+            {
+                let mut serialized = vec![0; buf_size];
+                let mut cursor = Cursor::new(&mut serialized[..]);
+                a.serialize_with_mode(&mut cursor, compress).unwrap();
+
+                let mut cursor = Cursor::new(&serialized[..]);
+                let b = Affine::<P>::deserialize_with_mode(&mut cursor, compress, validate).unwrap();
+                assert_eq!(a, b);
+            }
+
+            {
+                a.y = -a.y;
+                let mut serialized = vec![0; buf_size];
+                let mut cursor = Cursor::new(&mut serialized[..]);
+                a.serialize_with_mode(&mut cursor, compress).unwrap();
+                let mut cursor = Cursor::new(&serialized[..]);
+                let b = Affine::<P>::deserialize_with_mode(&mut cursor, compress, validate).unwrap();
+                assert_eq!(a, b);
+            }
+
+            {
+                let a = Affine::<P>::zero();
+                let mut serialized = vec![0; buf_size];
+                let mut cursor = Cursor::new(&mut serialized[..]);
+                a.serialize_with_mode(&mut cursor, compress).unwrap();
+                let mut cursor = Cursor::new(&serialized[..]);
+                let b = Affine::<P>::deserialize_with_mode(&mut cursor, compress, validate).unwrap();
+                assert_eq!(a, b);
+            }
+
+            {
+                let a = Affine::<P>::zero();
+                let mut serialized = vec![0; buf_size - 1];
+                let mut cursor = Cursor::new(&mut serialized[..]);
+                a.serialize_with_mode(&mut cursor, compress).unwrap_err();
+            }
+
+            {
+                let serialized = vec![0; buf_size - 1];
+                let mut cursor = Cursor::new(&serialized[..]);
+                Affine::<P>::deserialize_with_mode(&mut cursor, compress, validate).unwrap_err();
+            }
+
+            {
+                let mut serialized = vec![0; a.uncompressed_size()];
+                let mut cursor = Cursor::new(&mut serialized[..]);
+                a.serialize_uncompressed(&mut cursor).unwrap();
+
+                let mut cursor = Cursor::new(&serialized[..]);
+                let b = Affine::<P>::deserialize_uncompressed(&mut cursor).unwrap();
+                assert_eq!(a, b);
+            }
+
+            {
+                a.y = -a.y;
+                let mut serialized = vec![0; a.uncompressed_size()];
+                let mut cursor = Cursor::new(&mut serialized[..]);
+                a.serialize_uncompressed(&mut cursor).unwrap();
+                let mut cursor = Cursor::new(&serialized[..]);
+                let b = Affine::<P>::deserialize_uncompressed(&mut cursor).unwrap();
+                assert_eq!(a, b);
+            }
+
+            {
+                let a = Affine::<P>::zero();
+                let mut serialized = vec![0; a.uncompressed_size()];
+                let mut cursor = Cursor::new(&mut serialized[..]);
+                a.serialize_uncompressed(&mut cursor).unwrap();
+                let mut cursor = Cursor::new(&serialized[..]);
+                let b = Affine::<P>::deserialize_uncompressed(&mut cursor).unwrap();
+                assert_eq!(a, b);
+            }
+        }
     }
-    acc
 }
 
-#[test]
-fn variable_base_test_with_bls12() {
-    const SAMPLES: usize = 1 << 10;
-    for _ in 0..10{
-        let mut rng = TestRng::default();
-        let v = (0..SAMPLES).map(|_| Fr::rand(&mut rng).to_bigint()).collect::<Vec<_>>();
-        let g = (0..SAMPLES).map(|_| G1Projective::rand(&mut rng).to_affine()).collect::<Vec<_>>();
+pub fn sw_from_random_bytes<P: ShortWeierstrassParameters>(rng: &mut TestRng) {
+    let buf_size = Affine::<P>::zero().compressed_size();
 
-        let naive = naive_variable_base_msm(g.as_slice(), v.as_slice());
-        let fast = VariableBase::msm(g.as_slice(), v.as_slice());
+    for _ in 0..ITERATIONS {
+        let a = Projective::<P>::rand(rng);
+        let a = a.to_affine();
+        {
+            let mut serialized = vec![0; buf_size];
+            let mut cursor = Cursor::new(&mut serialized[..]);
+            a.serialize_compressed(&mut cursor).unwrap();
 
-        assert_eq!(naive.to_affine(), fast.to_affine());
+            let mut cursor = Cursor::new(&serialized[..]);
+            let p1 = Affine::<P>::deserialize_compressed(&mut cursor).unwrap();
+            let p2 = Affine::<P>::from_random_bytes(&serialized).unwrap();
+            assert_eq!(p1, p2);
+        }
     }
-    
-}
-
-#[test]
-fn xxxxxx(){
-    let str = "110101011100100011111011011111000000011110111001010010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-    println!("{}",str.len());
-}
-
-
-#[test]
-fn variable_base_test_with_bls12_unequal_numbers() {
-    const SAMPLES: usize = 1 << 10;
-
-    let mut rng = TestRng::default();
-
-    let v = (0..SAMPLES - 100).map(|_| Fr::rand(&mut rng).to_bigint()).collect::<Vec<_>>();
-    let g = (0..SAMPLES).map(|_| G1Projective::rand(&mut rng).to_affine()).collect::<Vec<_>>();
-
-    let naive = naive_variable_base_msm(g.as_slice(), v.as_slice());
-    let fast = VariableBase::msm(g.as_slice(), v.as_slice());
-
-    assert_eq!(naive.to_affine(), fast.to_affine());
-}
-
-#[test]
-fn double_in_place_test(){
-    //在下面填写x,y,z坐标
-    let (x,y,z) = (1,2,3);
-
-    let (x,y,z) = (Fp384::from_bigint(BigInteger384::from(x)).unwrap(),Fp384::from_bigint(BigInteger384::from(y)).unwrap(),Fp384::from_bigint(BigInteger384::from(z)).unwrap());
-    println!("x:{x:?}");
-    println!("y:{y:?}");
-    println!("z:{z:?}");
-    let mut g = G1Projective::new(x,y,z);
-    println!("{g:?}");
-    g.double_in_place();
-    println!("");
-    println!("{g:?}");
-}
-
-#[test]
-fn double_in_place_test_random(){
-    let mut rng = TestRng::default();
-    
-    let mut g = G1Projective::rand(&mut rng);
-    println!("{g:?}");
-    g.double_in_place();
-    println!("");
-    println!("{g:?}");
-}
-
-#[test]
-fn mul_bits_test(){
-    //t填scalar的数值
-    let t: u64 = 1;
-    let scalar = BigInteger256::from(t);
-    println!("t:{t:?}\nscalar:{scalar:?}");
-    //在下面填写x,y坐标
-    let (x,y) = (1,2);
-
-    let (x,y) = (Fp384::from_bigint(BigInteger384::from(x)).unwrap(),Fp384::from_bigint(BigInteger384::from(y)).unwrap());
-    println!("x:{x:?}");
-    println!("y:{y:?}");
-    let base: Affine<Bls12_377G1Parameters> = Affine::new(x,y,false);
-    println!("base:{base:?}");
-
-    let result = base.mul_bits(BitIteratorBE::new(scalar));
-
-    println!("result:{result:?}");
-}
-
-#[test]
-fn mul_bits_test_random(){
-    let mut rng = TestRng::default();
-    
-    let scalar = Fr::rand(&mut rng).to_bigint();
-    let base = G1Projective::rand(&mut rng).to_affine();
-    println!("{scalar:?}\n\n{base:?}\n");
-
-    let result = base.mul_bits(BitIteratorBE::new(scalar));
-
-    println!("{result:?}");
 }
