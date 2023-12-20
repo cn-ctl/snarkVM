@@ -16,17 +16,13 @@ use super::*;
 use console::{account::*, network::Testnet3};
 use snarkvm_utilities::Uniform;
 
+use rand::RngCore;
+
+const ITERATIONS: u64 = 100;
 use std::mem;
 fn size_of<T>(_: &T) {
     println!("type {}, size {}, align {}",std::any::type_name::<T>(), mem::size_of::<T>(),mem::align_of::<T>());
 }
-
-use rand::RngCore;
-
-const ITERATIONS: u64 = 100;
-
-
-
 #[test]
 fn test_coinbase_puzzle() {
     let mut rng = TestRng::default();
@@ -34,12 +30,13 @@ fn test_coinbase_puzzle() {
     let max_degree = 1 << 15;
     let max_config = PuzzleConfig { degree: max_degree };
     let srs = CoinbasePuzzle::<Testnet3>::setup(max_config).unwrap();
+
     for log_degree in 5..10 {
         let degree = (1 << log_degree) - 1;
         let config = PuzzleConfig { degree };
         let puzzle = CoinbasePuzzle::<Testnet3>::trim(&srs, config).unwrap();
         let epoch_challenge = EpochChallenge::new(rng.next_u32(), Default::default(), degree).unwrap();
-        
+
         for batch_size in 1..10 {
             let solutions = (0..batch_size)
                 .map(|_| {
@@ -49,12 +46,11 @@ fn test_coinbase_puzzle() {
                     puzzle.prove(&epoch_challenge, address, nonce, None).unwrap()
                 })
                 .collect::<Vec<_>>();
-            
-            let full_solution = puzzle.accumulate(solutions, &epoch_challenge, 0).unwrap();
-            assert!(puzzle.verify(&full_solution, &epoch_challenge, 0u64).unwrap());
+            let full_solution = CoinbaseSolution::new(solutions).unwrap();
+            assert!(puzzle.check_solutions(&full_solution, &epoch_challenge, 0u64).is_ok());
 
             let bad_epoch_challenge = EpochChallenge::new(rng.next_u32(), Default::default(), degree).unwrap();
-            assert!(!puzzle.verify(&full_solution, &bad_epoch_challenge, 0u64).unwrap());
+            assert!(puzzle.check_solutions(&full_solution, &bad_epoch_challenge, 0u64).is_err());
         }
     }
 }
@@ -110,8 +106,8 @@ fn test_edge_case_for_degree() {
 
     // Generate a prover solution.
     let prover_solution = puzzle.prove(&epoch_challenge, address, rng.gen(), None).unwrap();
-    let coinbase_solution = puzzle.accumulate(vec![prover_solution], &epoch_challenge, 0).unwrap();
-    assert!(puzzle.verify(&coinbase_solution, &epoch_challenge, 0u64).unwrap());
+    let coinbase_solution = CoinbaseSolution::new(vec![prover_solution]).unwrap();
+    assert!(puzzle.check_solutions(&coinbase_solution, &epoch_challenge, 0u64).is_ok());
 }
 
 /// Use `cargo test profiler --features timer` to run this test.
@@ -140,7 +136,7 @@ fn test_profiler() -> Result<()> {
     // Generate proof inputs
     let epoch_challenge = EpochChallenge::new(rng.next_u32(), Default::default(), degree).unwrap();
 
-    for batch_size in [10, 100, <Testnet3 as Network>::MAX_PROVER_SOLUTIONS] {
+    for batch_size in [10, 100, <Testnet3 as Network>::MAX_SOLUTIONS] {
         // Generate the solutions.
         let solutions = (0..batch_size)
             .map(|_| {
@@ -148,11 +144,10 @@ fn test_profiler() -> Result<()> {
                 puzzle.prove(&epoch_challenge, address, nonce, None).unwrap()
             })
             .collect::<Vec<_>>();
-        // Accumulate the solutions.
-        let solution = puzzle.accumulate(solutions, &epoch_challenge, 0).unwrap();
-
-        // Verify the solution.
-        puzzle.verify(&solution, &epoch_challenge, 0u64).unwrap();
+        // Construct the solutions.
+        let solutions = CoinbaseSolution::new(solutions).unwrap();
+        // Verify the solutions.
+        puzzle.check_solutions(&solutions, &epoch_challenge, 0u64).unwrap();
     }
 
     bail!("\n\nRemember to #[ignore] this test!\n\n")

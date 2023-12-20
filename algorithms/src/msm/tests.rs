@@ -15,7 +15,7 @@
 use crate::msm::*;
 use snarkvm_curves::{
     bls12_377::{Fr, G1Projective, FqParameters, Bls12_377G1Parameters},
-    traits::{AffineCurve, ProjectiveCurve}, templates::short_weierstrass_jacobian::Affine,
+    traits::{AffineCurve, ProjectiveCurve}, templates::short_weierstrass_jacobian::{Affine, Projective},
 };
 use snarkvm_fields::{PrimeField, Zero, Fp384};
 use snarkvm_utilities::{
@@ -33,6 +33,26 @@ fn naive_variable_base_msm<G: AffineCurve>(
         acc += base.mul_bits(BitIteratorBE::new(*scalar));
     }
     acc
+}
+
+fn creat_projective(x:u64, y:u64, z:u64)->Projective<Bls12_377G1Parameters>{
+    let (x,y,z) = (Fp384::from_bigint(BigInteger384::from(x)).unwrap(),Fp384::from_bigint(BigInteger384::from(y)).unwrap(),Fp384::from_bigint(BigInteger384::from(z)).unwrap());
+    println!("x:{x:?}");
+    println!("y:{y:?}");
+    println!("z:{z:?}");
+    let g = G1Projective::new(x,y,z);
+    println!("{g:?}");
+    g
+}
+
+fn creat_affine(x:u64, y:u64, infinity:bool)->Affine<Bls12_377G1Parameters>{
+    let (x,y) = (Fp384::from_bigint(BigInteger384::from(x)).unwrap(),Fp384::from_bigint(BigInteger384::from(y)).unwrap());
+    println!("x:{x:?}");
+    println!("y:{y:?}");
+    println!("infinity:{infinity:?}");
+    let g = Affine::new(x,y,infinity);
+    println!("{g:?}");
+    g
 }
 
 #[test]
@@ -78,12 +98,7 @@ fn double_in_place_test(){
     //在下面填写x,y,z坐标
     let (x,y,z) = (1,2,3);
 
-    let (x,y,z) = (Fp384::from_bigint(BigInteger384::from(x)).unwrap(),Fp384::from_bigint(BigInteger384::from(y)).unwrap(),Fp384::from_bigint(BigInteger384::from(z)).unwrap());
-    println!("x:{x:?}");
-    println!("y:{y:?}");
-    println!("z:{z:?}");
-    let mut g = G1Projective::new(x,y,z);
-    println!("{g:?}");
+    let mut g = creat_projective(x,y,z);
     g.double_in_place();
     println!("");
     println!("{g:?}");
@@ -107,12 +122,9 @@ fn mul_bits_test(){
     let scalar = BigInteger256::from(t);
     println!("t:{t:?}\nscalar:{scalar:?}");
     //在下面填写x,y坐标
-    let (x,y) = (1,2);
+    let (x,y,infinity) = (1,2,false);
 
-    let (x,y) = (Fp384::from_bigint(BigInteger384::from(x)).unwrap(),Fp384::from_bigint(BigInteger384::from(y)).unwrap());
-    println!("x:{x:?}");
-    println!("y:{y:?}");
-    let base: Affine<Bls12_377G1Parameters> = Affine::new(x,y,false);
+    let base: Affine<Bls12_377G1Parameters> = creat_affine(x, y, infinity);
     println!("base:{base:?}");
 
     let result = base.mul_bits(BitIteratorBE::new(scalar));
@@ -138,23 +150,32 @@ fn add_assign_test(){
     //在下面填写x,y,z坐标
     let (x,y,z) = (1,2,3);
 
-    let (x,y,z) = (Fp384::from_bigint(BigInteger384::from(x)).unwrap(),Fp384::from_bigint(BigInteger384::from(y)).unwrap(),Fp384::from_bigint(BigInteger384::from(z)).unwrap());
-    println!("x:{x:?}");
-    println!("y:{y:?}");
-    println!("z:{z:?}");
-    let mut a = G1Projective::new(x,y,z);    
+    let mut a = creat_projective(x, y, z);    
 
-    
     //在下面填写另一组x,y,z坐标
     let (x,y,z) = (1,2,3);
 
-    let (x,y,z) = (Fp384::from_bigint(BigInteger384::from(x)).unwrap(),Fp384::from_bigint(BigInteger384::from(y)).unwrap(),Fp384::from_bigint(BigInteger384::from(z)).unwrap());
-    println!("x:{x:?}");
-    println!("y:{y:?}");
-    println!("z:{z:?}");
-    let b = G1Projective::new(x,y,z);    
+    let b = creat_projective(x, y, z);    
 
-    println!("a:{a:?}\n\nb:{b:?}\n");
     a+=b;
     println!("a:{a:?}");
+}
+
+#[test]
+fn msm_test(){
+    //在下方添加base点
+    let bases = [
+        (1,1,false),
+        (2,2,false),
+        (3,3,false),
+        ];
+
+    let bases = bases.into_iter().map(|(x,y,infinity)| creat_affine(x, y, infinity)).collect::<Vec<_>>();
+
+    //在下方添加scalar
+    let scalars = [1,2,3,4,5,6];
+    let scalars = scalars.into_iter().map(|t| BigInteger256::from(t)).collect::<Vec<_>>();
+
+    let result = naive_variable_base_msm(bases.as_slice(), scalars.as_slice());
+    println!("result:{result:?}");
 }
