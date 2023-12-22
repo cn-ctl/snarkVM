@@ -153,28 +153,37 @@ fn test_profiler() -> Result<()> {
     bail!("\n\nRemember to #[ignore] this test!\n\n")
 }
 
+#[inline]
+fn bitrev(a: u64, log_len: u32) -> u64 {
+    a.reverse_bits() >> (64 - log_len)
+}
+
+fn derange_helper<T>(xi: &mut [T], log_len: u32) {
+    for idx in 1..(xi.len() as u64 - 1) {
+        let ridx = bitrev(idx, log_len);
+        if idx < ridx {
+            xi.swap(idx as usize, ridx as usize);
+        }
+    }
+}
+
+fn log2(x: usize) -> u32 {
+    if x == 0 {
+        0
+    } else if x.is_power_of_two() {
+        1usize.leading_zeros() - x.leading_zeros()
+    } else {
+        0usize.leading_zeros() - x.leading_zeros()
+    }
+}
+
 #[test]
 fn fft_test(){
-    let mut rng = TestRng::default();
+    //数组长度必须是2^n-1
+    let mut x_s = [1,2,3,4,5,6,7];
 
-    let max_degree = 1 << 15;
-    let max_config = PuzzleConfig { degree: max_degree };
-    let srs = CoinbasePuzzle::<Testnet3>::setup(max_config).unwrap();
+    let log_len = log2(x_s.len());
+    derange_helper(&mut x_s, log_len);
 
-    //可以在这里设置degree
-    let log_degree = 3;
-    let degree = (1 << log_degree) - 1;
-    let config = PuzzleConfig { degree };
-    let puzzle = CoinbasePuzzle::<Testnet3>::trim(&srs, config).unwrap();
-
-    if let CoinbasePuzzle::Prover(pk) = puzzle {
-        let epoch_challenge = EpochChallenge::new(rng.next_u32(), Default::default(), degree).unwrap();
-        let private_key = PrivateKey::<Testnet3>::new(&mut rng).unwrap();
-        let address = Address::try_from(private_key).unwrap();
-        let nonce = u64::rand(&mut rng);
-        let polynomial = CoinbasePuzzle::prover_polynomial(&epoch_challenge, address, nonce).unwrap();
-        println!("{polynomial:?}");
-        let result = pk.product_domain.in_order_fft_with_pc(&polynomial, &pk.fft_precomputation);
-        println!("{result:?}");
-    };
+    println!("{x_s:?}");
 }
