@@ -180,7 +180,7 @@ fn log2(x: usize) -> u32 {
 #[test]
 fn fft_test(){
     //数组长度必须是2^n-1
-    let mut x_s = [1,2,3,4,5,6,7];
+    let mut x_s = (1..512).collect_vec();
 
     let log_len = log2(x_s.len());
     derange_helper(&mut x_s, log_len);
