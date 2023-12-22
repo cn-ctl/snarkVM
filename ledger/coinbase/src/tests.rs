@@ -19,10 +19,10 @@ use snarkvm_utilities::Uniform;
 use rand::RngCore;
 
 const ITERATIONS: u64 = 100;
-use std::mem;
+/*use std::mem;
 fn size_of<T>(_: &T) {
     println!("type {}, size {}, align {}",std::any::type_name::<T>(), mem::size_of::<T>(),mem::align_of::<T>());
-}
+}*/
 #[test]
 fn test_coinbase_puzzle() {
     let mut rng = TestRng::default();
@@ -151,4 +151,30 @@ fn test_profiler() -> Result<()> {
     }
 
     bail!("\n\nRemember to #[ignore] this test!\n\n")
+}
+
+#[test]
+fn fft_test(){
+    let mut rng = TestRng::default();
+
+    let max_degree = 1 << 15;
+    let max_config = PuzzleConfig { degree: max_degree };
+    let srs = CoinbasePuzzle::<Testnet3>::setup(max_config).unwrap();
+
+    //可以在这里设置degree
+    let log_degree = 3;
+    let degree = (1 << log_degree) - 1;
+    let config = PuzzleConfig { degree };
+    let puzzle = CoinbasePuzzle::<Testnet3>::trim(&srs, config).unwrap();
+
+    if let CoinbasePuzzle::Prover(pk) = puzzle {
+        let epoch_challenge = EpochChallenge::new(rng.next_u32(), Default::default(), degree).unwrap();
+        let private_key = PrivateKey::<Testnet3>::new(&mut rng).unwrap();
+        let address = Address::try_from(private_key).unwrap();
+        let nonce = u64::rand(&mut rng);
+        let polynomial = CoinbasePuzzle::prover_polynomial(&epoch_challenge, address, nonce).unwrap();
+        println!("{polynomial:?}");
+        let result = pk.product_domain.in_order_fft_with_pc(&polynomial, &pk.fft_precomputation);
+        println!("{result:?}");
+    };
 }

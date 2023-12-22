@@ -14,7 +14,7 @@
 
 use crate::msm::*;
 use snarkvm_curves::{
-    bls12_377::{Fr, G1Projective, FqParameters, Bls12_377G1Parameters},
+    bls12_377::{Fr, G1Projective, Bls12_377G1Parameters},
     traits::{AffineCurve, ProjectiveCurve}, templates::short_weierstrass_jacobian::{Affine, Projective},
 };
 use snarkvm_fields::{PrimeField, Zero, Fp384};
@@ -22,7 +22,6 @@ use snarkvm_utilities::{
     rand::{TestRng, Uniform},
     BitIteratorBE, BigInteger384, BigInteger256, 
 };
-use std::marker::PhantomData;
 fn naive_variable_base_msm<G: AffineCurve>(
     bases: &[G],
     scalars: &[<G::ScalarField as PrimeField>::BigInteger],
