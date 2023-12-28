@@ -14,8 +14,8 @@
 
 use super::*;
 use console::{account::*, network::Testnet3};
-use snarkvm_curves::bls12_377::FqParameters;
-use snarkvm_fields::Fp384;
+use snarkvm_curves::bls12_377::{FqParameters, FrParameters};
+use snarkvm_fields::{Fp384, Fp256};
 use snarkvm_utilities::Uniform;
 
 use rand::RngCore;
@@ -198,7 +198,7 @@ fn hash_test(){
     //这里填degree
     let degree = 512;
     
-    let result = hash_to_polynomial::<Fp384<FqParameters>>(&input, degree);
+    let result = hash_to_polynomial::<Fp256<FrParameters>>(&input, degree);
 
     println!("{result:?}");
 }
