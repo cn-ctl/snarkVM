@@ -14,6 +14,8 @@
 
 use super::*;
 use console::{account::*, network::Testnet3};
+use snarkvm_curves::bls12_377::FqParameters;
+use snarkvm_fields::Fp384;
 use snarkvm_utilities::Uniform;
 
 use rand::RngCore;
@@ -186,4 +188,17 @@ fn fft_test(){
     derange_helper(&mut x_s, log_len);
 
     println!("{x_s:?}");
+}
+
+#[test]
+fn hash_test(){
+    let mut input = [0u8;76];
+    input[0] = 1u8;
+
+    //这里填degree
+    let degree = 512;
+    
+    let result = hash_to_polynomial::<Fp384<FqParameters>>(&input, degree);
+
+    println!("{result:?}");
 }
