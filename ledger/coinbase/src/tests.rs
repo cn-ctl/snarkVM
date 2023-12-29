@@ -212,7 +212,7 @@ fn blake256_test(){
     println!("{}",hex::encode(input));
     let hash = blake2::Blake2s256::digest(input);
     
-    print!("{}", hex::encode(hash));
+    println!("{}", hex::encode(hash));
     
 }
 
@@ -224,6 +224,6 @@ fn blake512_test(){
     println!("{}",hex::encode(input));
     let hash = blake2::Blake2b512::digest(input);
     
-    print!("{}", hex::encode(hash));
+    println!("{}", hex::encode(hash));
     
 }
