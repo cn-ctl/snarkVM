@@ -3173,6 +3173,7 @@ dependencies = [
  "bincode",
  "blake2",
  "criterion",
+ "hex",
  "indexmap 2.0.2",
  "rand",
  "rayon",

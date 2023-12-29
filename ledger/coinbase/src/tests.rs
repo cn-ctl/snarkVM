@@ -14,11 +14,12 @@
 
 use super::*;
 use console::{account::*, network::Testnet3};
-use snarkvm_curves::bls12_377::{FqParameters, FrParameters};
-use snarkvm_fields::{Fp384, Fp256};
+use snarkvm_curves::bls12_377:: FrParameters;
+use snarkvm_fields:: Fp256;
 use snarkvm_utilities::Uniform;
-
+use blake2::Digest;
 use rand::RngCore;
+use hex;
 
 const ITERATIONS: u64 = 100;
 /*use std::mem;
@@ -201,4 +202,28 @@ fn hash_test(){
     let result = hash_to_polynomial::<Fp256<FrParameters>>(&input, degree);
 
     println!("{result:?}");
+}
+
+#[test]
+fn blake256_test(){
+    let mut input = [0u8;76];
+    input[0] = 1u8;
+
+    println!("{}",hex::encode(input));
+    let hash = blake2::Blake2s256::digest(input);
+    
+    print!("{}", hex::encode(hash));
+    
+}
+
+#[test]
+fn blake512_test(){
+    let mut input = [0u8;76];
+    input[0] = 1u8;
+
+    println!("{}",hex::encode(input));
+    let hash = blake2::Blake2b512::digest(input);
+    
+    print!("{}", hex::encode(hash));
+    
 }

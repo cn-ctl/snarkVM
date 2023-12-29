@@ -98,6 +98,9 @@ version = "1"
 version = "1.0"
 features = [ "preserve_order" ]
 
+[dependencies.hex]
+version = "0.4.3"
+
 [dev-dependencies.console]
 package = "snarkvm-console"
 path = "../../console"
